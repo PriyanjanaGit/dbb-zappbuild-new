@@ -64,6 +64,9 @@ sortedList.each { buildFile ->
 			// only scan the load module if load module scanning turned on for file
 			String scanLoadModule = props.getFileProperty('linkedit_scanLoadModule', buildFile)
 			if (scanLoadModule && scanLoadModule.toBoolean() && getRepositoryClient())
+              if (buildUtils.isCICS(logicalFile)) 
+                impactUtils.saveStaticLinkDependencies(buildFile, props.linkedit_CICSloadPDS, logicalFile, repositoryClient)
+              else
 				impactUtils.saveStaticLinkDependencies(buildFile, props.linkedit_loadPDS, logicalFile, repositoryClient)
 		}
 	}
@@ -98,7 +101,11 @@ def createLinkEditCommand(String buildFile, LogicalFile logicalFile, String memb
 	// deployType requires a file level overwrite to define isCICS and isDLI, while the linkcard does not carry isCICS, isDLI attributes
 	String deployType = buildUtils.getDeployType("linkedit", buildFile, logicalFile)
 	linkedit.dd(new DDStatement().name("SYSLIN").dsn("${props.linkedit_srcPDS}($member)").options("shr").report(true))
-	linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.linkedit_loadPDS}($member)").options('shr').output(true).deployType(deployType))
+    if (buildUtils.isCICS(logicalFile)) 
+        linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.linkedit_CICSloadPDS}($member)").options('shr').output(true).  
+        deployType(linkedit_deployType))
+    else
+	    linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.linkedit_loadPDS}($member)").options('shr').output(true).deployType(deployType))
 	linkedit.dd(new DDStatement().name("SYSPRINT").options(props.linkedit_tempOptions))
 	linkedit.dd(new DDStatement().name("SYSUT1").options(props.linkedit_tempOptions))
 

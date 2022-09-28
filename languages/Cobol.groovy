@@ -121,7 +121,15 @@ sortedList.each { buildFile ->
 					// only scan the load module if load module scanning turned on for file
 					String scanLoadModule = props.getFileProperty('cobol_scanLoadModule', buildFile)
 					if (scanLoadModule && scanLoadModule.toBoolean() && getRepositoryClient())
-						impactUtils.saveStaticLinkDependencies(buildFile, props.linkedit_loadPDS, logicalFile, repositoryClient)
+#						impactUtils.saveStaticLinkDependencies(buildFile, props.linkedit_loadPDS, logicalFile, repositoryClient)
+              if (buildUtils.isCICS(logicalFile)) 
+                  impactUtils.saveStaticLinkDependencies(buildFile, props.cobol_CICSloadPDS, logicalFile, repositoryClient)
+              else
+                  if (isSP && isSP.toBoolean())  
+                     impactUtils.saveStaticLinkDependencies(buildFile, props.cobol_loadSPPDS, logicalFile, repositoryClient)
+                  else
+                      impactUtils.saveStaticLinkDependencies(buildFile, props.cobol_loadPDS, logicalFile, repositoryClient)
+
 				}
 			}
 		}
@@ -312,6 +320,15 @@ def createLinkEditCommand(String buildFile, LogicalFile logicalFile, String memb
 	String linker = props.getFileProperty('cobol_linkEditor', buildFile)
 	String linkEditStream = props.getFileProperty('cobol_linkEditStream', buildFile)
 	String linkDebugExit = props.getFileProperty('cobol_linkDebugExit', buildFile)
+	String isDB2SP = props.getFileProperty('cobol_isDB2SP', buildFile)
+    String islnkMQ = props.getFileProperty('cobol_isMQ', buildFile)
+    String db2batchInclude = props.getFileProperty('cobol_db2_batch_interface', buildFile) 
+    String db2spInclude = props.getFileProperty('cobol_db2sp_interface', buildFile) 
+    String db2cicsInclude = props.getFileProperty('cobol_db2_cics_interface', buildFile)     
+    String mqbatchInclude = props.getFileProperty('cobol_mq_batch_interface', buildFile) 
+    String mqcicsInclude = props.getFileProperty('cobol_mq_cics_interface', buildFile) 
+    String cicsInclude = props.getFileProperty('cobol_cics_interface', buildFile)
+	
 
 	// obtain githash for buildfile
 	String cobol_storeSSI = props.getFileProperty('cobol_storeSSI', buildFile)
@@ -322,6 +339,34 @@ def createLinkEditCommand(String buildFile, LogicalFile logicalFile, String memb
 	
 	// define the MVSExec command to link edit the program
 	MVSExec linkedit = new MVSExec().file(buildFile).pgm(linker).parm(parms)
+	
+   // create the link edit deck for the various program types (DB2, DB2 Stored Procedure, CICS and MQ combinations)
+   // If set DBB uses the linkEditStream variable contents to set the link deck
+   // note that once linkEditStream is set the output of the compile will be written to the OBJ type instead of to a temp file
+   if ((buildUtils.isSQL(logicalFile)) && (buildUtils.isCICS(logicalFile))) {
+       linkEditStream= cicsInclude + " \n "  + db2cicsInclude + " \n " + linkEditStream
+       if (islnkMQ && islnkMQ.toBoolean())
+          linkEditStream= mqcicsInclude + " \n " + linkEditStream  
+       }
+   else { // start not DB2 & CICS
+       if (buildUtils.isSQL(logicalFile)) {  // start batch DB2
+            if (isDB2SP && isDB2SP.toBoolean())  // DB2 Stored procedure
+               linkEditStream= db2spInclude + " \n " + linkEditStream
+            else {
+               linkEditStream= db2batchInclude + " \n " + linkEditStream
+               if (islnkMQ && islnkMQ.toBoolean())
+                  linkEditStream= mqbatchInclude + " \n " + linkEditStream  }
+            }  // end batch DB2
+       if (buildUtils.isCICS(logicalFile)) {
+            linkEditStream= cicsInclude + " \n " + linkEditStream
+            if (islnkMQ && islnkMQ.toBoolean())
+               linkEditStream= mqcicsInclude + " \n " + linkEditStream  }
+       }  // end not DB2 & CICS
+         
+   if ((!buildUtils.isSQL(logicalFile)) && (!buildUtils.isCICS(logicalFile)))     
+      if (islnkMQ && islnkMQ.toBoolean())  
+         linkEditStream= mqbatchInclude + " \n " + linkEditStream  
+	
 
 	// Create a physical link card
 	if ( (linkEditStream) || (props.debug && linkDebugExit!= null)) {
@@ -349,12 +394,31 @@ def createLinkEditCommand(String buildFile, LogicalFile logicalFile, String memb
 	}
 
 	// add DD statements to the linkedit command
-	String deployType = buildUtils.getDeployType("cobol", buildFile, logicalFile)
+#	String deployType = buildUtils.getDeployType("cobol", buildFile, logicalFile)
+	String linkedit_deployType = props.getFileProperty('linkedit_deployType', buildFile)
+    if ( linkedit_deployType == null ) {
+      if (buildUtils.isCICS(logicalFile))
+          linkedit_deployType = 'CICSLOAD'
+     else
+          linkedit_deployType = 'LOAD'
+     }
+	
 	if(isZUnitTestCase){
 		linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_testcase_loadPDS}($member)").options('shr').output(true).deployType('ZUNIT-TESTCASE'))
 	}
-	else {
-		linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_loadPDS}($member)").options('shr').output(true).deployType(deployType))
+#	else {
+#		linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_loadPDS}($member)").options('shr').output(true).deployType(deployType))
+
+    else { //set output load module types
+     if (buildUtils.isCICS(logicalFile)) 
+        linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_CICSloadPDS}($member)").options('shr').output(true).   
+         deployType(linkedit_deployType))
+    else  if (isDB2SP && isDB2SP.toBoolean())
+          linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_loadSPPDS}($member)").options('shr').output(true).  
+           deployType(linkedit_deployType)) 
+       else
+           linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_loadPDS}($member)").options('shr').output(true). 
+            deployType(linkedit_deployType) 
 	}
 	linkedit.dd(new DDStatement().name("SYSPRINT").options(props.cobol_printTempOptions))
 	linkedit.dd(new DDStatement().name("SYSUT1").options(props.cobol_tempOptions))

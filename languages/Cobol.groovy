@@ -406,14 +406,11 @@ def createLinkEditCommand(String buildFile, LogicalFile logicalFile, String memb
 	}
     else { //set output load module types
      if (buildUtils.isCICS(logicalFile)) 
-        linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_CICSloadPDS}($member)").options('shr').output(true).   
-         deployType(linkedit_deployType))
-    else  if (isDB2SP && isDB2SP.toBoolean())
-          linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_loadSPPDS}($member)").options('shr').output(true).  
-           deployType(linkedit_deployType)) 
-       else
-           linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_loadPDS}($member)").options('shr').output(true). 
-            deployType(linkedit_deployType) 
+        linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_CICSloadPDS}($member)").options('shr').output(true).deployType(linkedit_deployType))
+     else  if (isDB2SP && isDB2SP.toBoolean())
+        linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_loadSPPDS}($member)").options('shr').output(true).deployType(linkedit_deployType)) 
+     else
+        linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_loadPDS}($member)").options('shr').output(true).deployType(linkedit_deployType) 
 	}
 	linkedit.dd(new DDStatement().name("SYSPRINT").options(props.cobol_printTempOptions))
 	linkedit.dd(new DDStatement().name("SYSUT1").options(props.cobol_tempOptions))

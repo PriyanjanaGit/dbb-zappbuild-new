@@ -396,7 +396,7 @@ def createLinkEditCommand(String buildFile, LogicalFile logicalFile, String memb
 	String linkedit_deployType = props.getFileProperty('linkedit_deployType', buildFile)
     if ( linkedit_deployType == null ) {
       if (buildUtils.isCICS(logicalFile))
-          linkedit_deployType = 'CICSLOAD'
+          linkedit_deployType = 'CICS'
      else
           linkedit_deployType = 'LOAD'
      }

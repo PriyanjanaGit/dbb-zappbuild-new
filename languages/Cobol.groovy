@@ -121,7 +121,6 @@ sortedList.each { buildFile ->
 					// only scan the load module if load module scanning turned on for file
 					String scanLoadModule = props.getFileProperty('cobol_scanLoadModule', buildFile)
 					if (scanLoadModule && scanLoadModule.toBoolean() && getRepositoryClient())
-#						impactUtils.saveStaticLinkDependencies(buildFile, props.linkedit_loadPDS, logicalFile, repositoryClient)
               if (buildUtils.isCICS(logicalFile)) 
                   impactUtils.saveStaticLinkDependencies(buildFile, props.cobol_CICSloadPDS, logicalFile, repositoryClient)
               else
@@ -394,7 +393,6 @@ def createLinkEditCommand(String buildFile, LogicalFile logicalFile, String memb
 	}
 
 	// add DD statements to the linkedit command
-#	String deployType = buildUtils.getDeployType("cobol", buildFile, logicalFile)
 	String linkedit_deployType = props.getFileProperty('linkedit_deployType', buildFile)
     if ( linkedit_deployType == null ) {
       if (buildUtils.isCICS(logicalFile))
@@ -406,9 +404,6 @@ def createLinkEditCommand(String buildFile, LogicalFile logicalFile, String memb
 	if(isZUnitTestCase){
 		linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_testcase_loadPDS}($member)").options('shr').output(true).deployType('ZUNIT-TESTCASE'))
 	}
-#	else {
-#		linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_loadPDS}($member)").options('shr').output(true).deployType(deployType))
-
     else { //set output load module types
      if (buildUtils.isCICS(logicalFile)) 
         linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.cobol_CICSloadPDS}($member)").options('shr').output(true).   

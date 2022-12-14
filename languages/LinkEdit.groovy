@@ -1,5 +1,5 @@
 @groovy.transform.BaseScript com.ibm.dbb.groovy.ScriptLoader baseScript
-import com.ibm.dbb.repository.*
+import com.ibm.dbb.metadata.*
 import com.ibm.dbb.dependency.*
 import com.ibm.dbb.build.*
 import groovy.transform.*
@@ -9,7 +9,6 @@ import groovy.transform.*
 @Field BuildProperties props = BuildProperties.getInstance()
 @Field def buildUtils= loadScript(new File("${props.zAppBuildDir}/utilities/BuildUtilities.groovy"))
 @Field def impactUtils= loadScript(new File("${props.zAppBuildDir}/utilities/ImpactUtilities.groovy"))
-@Field RepositoryClient repositoryClient
 
 println("** Building files mapped to ${this.class.getName()}.groovy script")
 
@@ -29,16 +28,10 @@ sortedList.each { buildFile ->
 	// copy build file to input data set
 	buildUtils.copySourceFiles(buildFile, props.linkedit_srcPDS, null, null, null)
 
+	// Get logical file
+	LogicalFile logicalFile = SearchPathDependencyResolver.getLogicalFile(buildFile,props.workspace)
+
 	// create mvs commands
-	LogicalFile logicalFile
-	if (props.useSearchConfiguration && props.useSearchConfiguration.toBoolean()) { // use new SearchPathDependencyResolver
-		logicalFile = SearchPathDependencyResolver.getLogicalFile(buildFile,props.workspace)
-	}
-	else { // use deprecated DependencyResolver API
-		DependencyResolver dependencyResolver = buildUtils.createDependencyResolver(buildFile, null)
-		logicalFile = dependencyResolver.getLogicalFile()
-	}
-	
 	String member = CopyToPDS.createMemberName(buildFile)
 	
 	File logFile = new File( props.userBuild ? "${props.buildOutDir}/${member}.log" : "${props.buildOutDir}/${member}.linkedit.log")
@@ -57,17 +50,14 @@ sortedList.each { buildFile ->
 		String errorMsg = "*! The link edit return code ($rc) for $buildFile exceeded the maximum return code allowed ($maxRC)"
 		println(errorMsg)
 		props.error = "true"
-		buildUtils.updateBuildResult(errorMsg:errorMsg,logs:["${member}.log":logFile],client:getRepositoryClient())
+		buildUtils.updateBuildResult(errorMsg:errorMsg,logs:["${member}.log":logFile])
 	}
 	else {
 		if(!props.userBuild){
 			// only scan the load module if load module scanning turned on for file
 			String scanLoadModule = props.getFileProperty('linkedit_scanLoadModule', buildFile)
-			if (scanLoadModule && scanLoadModule.toBoolean() && getRepositoryClient())
-              if (buildUtils.isCICS(logicalFile)) 
-                impactUtils.saveStaticLinkDependencies(buildFile, props.linkedit_CICSloadPDS, logicalFile, repositoryClient)
-              else
-				impactUtils.saveStaticLinkDependencies(buildFile, props.linkedit_loadPDS, logicalFile, repositoryClient)
+			if (scanLoadModule && scanLoadModule.toBoolean())
+				impactUtils.saveStaticLinkDependencies(buildFile, props.linkedit_loadPDS, logicalFile)
 		}
 	}
 
@@ -101,11 +91,7 @@ def createLinkEditCommand(String buildFile, LogicalFile logicalFile, String memb
 	// deployType requires a file level overwrite to define isCICS and isDLI, while the linkcard does not carry isCICS, isDLI attributes
 	String deployType = buildUtils.getDeployType("linkedit", buildFile, logicalFile)
 	linkedit.dd(new DDStatement().name("SYSLIN").dsn("${props.linkedit_srcPDS}($member)").options("shr").report(true))
-    if (buildUtils.isCICS(logicalFile)) 
-        linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.linkedit_CICSloadPDS}($member)").options('shr').output(true).  
-        deployType(linkedit_deployType))
-    else
-	    linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.linkedit_loadPDS}($member)").options('shr').output(true).deployType(deployType))
+	linkedit.dd(new DDStatement().name("SYSLMOD").dsn("${props.linkedit_loadPDS}($member)").options('shr').output(true).deployType(deployType))
 	linkedit.dd(new DDStatement().name("SYSPRINT").options(props.linkedit_tempOptions))
 	linkedit.dd(new DDStatement().name("SYSUT1").options(props.linkedit_tempOptions))
 
@@ -125,14 +111,6 @@ def createLinkEditCommand(String buildFile, LogicalFile logicalFile, String memb
 	linkedit.copy(new CopyToHFS().ddName("SYSPRINT").file(logFile).hfsEncoding(props.logEncoding))
 
 	return linkedit
-}
-
-
-def getRepositoryClient() {
-	if (!repositoryClient && props."dbb.RepositoryClient.url")
-		repositoryClient = new RepositoryClient().forceSSLTrusted(true)
-
-	return repositoryClient
 }
 
 
